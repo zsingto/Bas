@@ -1,0 +1,11 @@
+{
+  "name": "auto-shot-clock",
+  "version": "1.0.0",
+  "description": "Basketball shot clock web app that stops automatically on the referee's whistle",
+  "private": true,
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "start": "python3 -m http.server 8000"
+  },
+  "license": "MIT"
+}

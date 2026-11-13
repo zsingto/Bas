@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0d10">
+<title>Auto Shot Clock</title>
+<style>
+  :root {
+    --bg: #0b0d10;
+    --panel: #151920;
+    --line: #262c36;
+    --text: #e8ecf1;
+    --muted: #8a94a3;
+    --shot: #ff3b30;
+    --shot-dim: #5a1612;
+    --game: #ffcc00;
+    --ok: #34c759;
+    --warn: #ff9f0a;
+    --btn: #1e242e;
+    --btn-hi: #2a3240;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans Thai", sans-serif;
+    display: flex;
+    flex-direction: column;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .digits { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; font-weight: 700; }
+
+  header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 16px; border-bottom: 1px solid var(--line);
+  }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; letter-spacing: .02em; }
+  header .spacer { flex: 1; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 13px; padding: 4px 10px; border-radius: 999px;
+    background: var(--btn); border: 1px solid var(--line); color: var(--muted);
+  }
+  .pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .pill.on { color: var(--text); }
+  .pill.on .dot { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+  .pill.hit .dot { background: var(--warn); box-shadow: 0 0 12px var(--warn); }
+  .pill.running .dot { background: var(--ok); }
+
+  main {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 1vh; padding: 8px 16px; min-height: 0;
+  }
+  .gamerow { display: flex; align-items: baseline; gap: 4vw; }
+  #period { font-size: clamp(20px, 5vh, 48px); color: var(--muted); }
+  #game { font-size: clamp(48px, 13vh, 160px); color: var(--game); line-height: 1; }
+  #shot {
+    font-size: clamp(120px, min(46vh, 60vw), 520px);
+    line-height: .95; color: var(--shot);
+    text-shadow: 0 0 40px rgba(255, 59, 48, .35);
+    transition: color .15s;
+  }
+  #shot.stopped { color: #c9302a; text-shadow: none; }
+  #shot.off { color: var(--shot-dim); text-shadow: none; }
+  #shot.expired { animation: flash .35s steps(2) infinite; }
+  @keyframes flash { 50% { opacity: .15; } }
+  #status { font-size: 15px; color: var(--muted); min-height: 1.4em; text-align: center; }
+
+  .controls {
+    display: grid; gap: 8px; padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    grid-template-columns: repeat(6, 1fr);
+    border-top: 1px solid var(--line); background: var(--panel);
+  }
+  button {
+    font: inherit; color: var(--text); background: var(--btn);
+    border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 6px; cursor: pointer; min-height: 56px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  }
+  button:hover { background: var(--btn-hi); }
+  button:active { transform: scale(.97); }
+  button:disabled { opacity: .35; cursor: default; }
+  button .k { font-size: 11px; color: var(--muted); }
+  button .b { font-size: 18px; font-weight: 700; }
+  #btnStart { grid-column: span 2; background: #123d1f; border-color: #1f6b35; }
+  #btnStart.running { background: #4a1512; border-color: #8a2a24; }
+  #btn24, #btn14 { background: #3a1311; border-color: #6b211d; }
+  #btn24 .b, #btn14 .b { font-size: 26px; }
+  #btnMic.on { background: #123d1f; border-color: #1f6b35; }
+
+  dialog {
+    background: var(--panel); color: var(--text); border: 1px solid var(--line);
+    border-radius: 14px; padding: 0; width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 32px);
+  }
+  dialog::backdrop { background: rgba(0, 0, 0, .6); }
+  .dlg { padding: 18px 20px; display: grid; gap: 14px; }
+  .dlg h2 { margin: 0; font-size: 18px; }
+  .dlg h3 { margin: 8px 0 0; font-size: 14px; color: var(--muted); font-weight: 600; }
+  .field { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; font-size: 14px; }
+  .field small { display: block; color: var(--muted); font-size: 12px; }
+  select, input[type=number] {
+    font: inherit; color: var(--text); background: var(--btn); border: 1px solid var(--line);
+    border-radius: 8px; padding: 6px 8px; width: 110px;
+  }
+  input[type=range] { width: 170px; }
+  .meter { height: 10px; border-radius: 6px; background: var(--btn); overflow: hidden; position: relative; }
+  .meter > i { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--ok); transition: width .05s; }
+  .meter > b { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--warn); }
+  .mono { font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--muted); }
+  .row { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+  .row button { min-height: 40px; padding: 8px 14px; flex-direction: row; }
+  #log { max-height: 120px; overflow: auto; margin: 0; padding-left: 18px; font-size: 13px; color: var(--muted); }
+  .keys { font-size: 13px; color: var(--muted); columns: 2; margin: 0; padding-left: 18px; }
+  kbd { font-family: ui-monospace, monospace; background: var(--btn); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; color: var(--text); }
+
+  @media (max-width: 640px) {
+    .controls { grid-template-columns: repeat(4, 1fr); }
+    #btnStart { grid-column: span 4; }
+    button .k { display: none; }
+    button .b { font-size: 16px; white-space: nowrap; }
+    header h1 { display: none; }
+    .keys { columns: 1; }
+  }
+</style>
+</head>
+<body>
+  <header>
+    <h1>🏀 Auto Shot Clock</h1>
+    <span class="pill" id="pillRun"><span class="dot"></span><span id="pillRunText">หยุด</span></span>
+    <span class="pill" id="pillMic"><span class="dot"></span><span id="pillMicText">ไมค์ปิด</span></span>
+    <span class="spacer"></span>
+    <button id="btnFull" title="เต็มจอ (F)" style="min-height:36px;padding:6px 10px">⛶</button>
+    <button id="btnSettings" title="ตั้งค่า" style="min-height:36px;padding:6px 10px">⚙︎</button>
+  </header>
+
+  <main>
+    <div class="gamerow">
+      <span id="period" class="digits">Q1</span>
+      <span id="game" class="digits">10:00</span>
+    </div>
+    <div id="shot" class="digits stopped">24</div>
+    <div id="status">กด <kbd>Space</kbd> เพื่อเริ่ม · เปิดไมค์ให้หยุดเองเมื่อได้ยินนกหวีด</div>
+  </main>
+
+  <div class="controls">
+    <button id="btnStart"><span class="b" id="btnStartText">▶ เริ่ม</span><span class="k">Space</span></button>
+    <button id="btn24"><span class="b">24</span><span class="k">R</span></button>
+    <button id="btn14"><span class="b">14</span><span class="k">T · Shift+T = ถ้าน้อยกว่า</span></button>
+    <button id="btnUndo" disabled><span class="b">↶</span><span class="k">ยกเลิกหยุด (U)</span></button>
+    <button id="btnMic"><span class="b">🎤</span><span class="k">นกหวีด (W)</span></button>
+    <button id="btnShotUp"><span class="b">+1</span><span class="k">ช็อต ↑</span></button>
+    <button id="btnShotDown"><span class="b">−1</span><span class="k">ช็อต ↓</span></button>
+    <button id="btnGameUp"><span class="b">เกม +1</span><span class="k">Shift ↑</span></button>
+    <button id="btnGameDown"><span class="b">เกม −1</span><span class="k">Shift ↓</span></button>
+    <button id="btnPeriod"><span class="b">ควอเตอร์ ›</span><span class="k">N</span></button>
+    <button id="btnHorn"><span class="b">📣</span><span class="k">บัซเซอร์ (B)</span></button>
+  </div>
+
+  <dialog id="dlg">
+    <form method="dialog" class="dlg">
+      <h2>ตั้งค่า</h2>
+
+      <h3>กติกา</h3>
+      <label class="field">รูปแบบ
+        <select id="setPreset">
+          <option value="fiba">FIBA (24/14, 10 นาที)</option>
+          <option value="nba">NBA (24/14, 12 นาที)</option>
+          <option value="fiba3x3">FIBA 3x3 (12 วิ, 10 นาที)</option>
+        </select>
+      </label>
+      <label class="field">ช็อตคล็อคเต็ม (วินาที)<input type="number" id="setShotFull" min="5" max="60"></label>
+      <label class="field">รีเซ็ตสั้น (วินาที)<input type="number" id="setShotShort" min="5" max="60"></label>
+      <label class="field">เวลาต่อควอเตอร์ (นาที)<input type="number" id="setPeriod" min="1" max="30" step="0.5"></label>
+      <label class="field"><span>หยุดเกมคล็อคเมื่อช็อตคล็อคหมด<small>ตามกติกาจริงเกมคล็อคหยุดเมื่อกรรมการเป่า — ถ้าเปิดไมค์ไว้ปิดตัวเลือกนี้ได้</small></span>
+        <input type="checkbox" id="setStopOnShot"></label>
+
+      <h3>ตรวจจับนกหวีด</h3>
+      <label class="field"><span>ความไว<small>ยิ่งมากยิ่งไว แต่อาจหยุดผิดจังหวะจากเสียงอื่น</small></span>
+        <input type="range" id="setSens" min="10" max="40" step="1"></label>
+      <label class="field"><span>ต้องดังต่อเนื่อง (ms)<small>ตัดเสียงสั้น ๆ เช่น รองเท้าเสียดพื้น</small></span>
+        <input type="number" id="setHold" min="40" max="600" step="10"></label>
+      <label class="field">ย่านความถี่ต่ำสุด (Hz)<input type="number" id="setFmin" min="500" max="8000" step="100"></label>
+      <label class="field">ย่านความถี่สูงสุด (Hz)<input type="number" id="setFmax" min="1000" max="12000" step="100"></label>
+      <div>
+        <div class="meter" title="ความโดดเด่นของยอดเสียง เทียบกับเกณฑ์ (ขีดสีส้ม)"><i id="meterBar"></i><b id="meterMark"></b></div>
+        <div class="mono" id="meterText">เปิดไมค์เพื่อดูค่าแบบสด — ลองเป่านกหวีดแล้วดูว่าแถบเกินขีดสีส้ม</div>
+      </div>
+
+      <h3>บันทึกการเป่านกหวีด</h3>
+      <ol id="log"></ol>
+
+      <h3>คีย์ลัด</h3>
+      <ul class="keys">
+        <li><kbd>Space</kbd> เริ่ม/หยุด</li>
+        <li><kbd>R</kbd> รีเซ็ต 24</li>
+        <li><kbd>T</kbd> รีเซ็ต 14</li>
+        <li><kbd>Shift</kbd>+<kbd>T</kbd> 14 ถ้าน้อยกว่า</li>
+        <li><kbd>↑</kbd>/<kbd>↓</kbd> ช็อต ±1 วิ</li>
+        <li><kbd>Shift</kbd>+<kbd>↑↓</kbd> เกม ±1 วิ</li>
+        <li><kbd>U</kbd> ยกเลิกการหยุด</li>
+        <li><kbd>W</kbd> เปิด/ปิดไมค์</li>
+        <li><kbd>N</kbd> ควอเตอร์ถัดไป</li>
+        <li><kbd>B</kbd> บัซเซอร์</li>
+        <li><kbd>F</kbd> เต็มจอ</li>
+      </ul>
+
+      <div class="row">
+        <button type="button" id="btnNewGame">เริ่มเกมใหม่</button>
+        <button value="close">ปิด</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="js/clock.js"></script>
+  <script src="js/whistle.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
